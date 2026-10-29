@@ -6,16 +6,10 @@ Cell, evaluate(), and FunctionDecl are already provided -- do not
 modify them. See the assignment, Part B, for the
 full requirements.
 
-Design note (filling a gap in the assignment spec): Requirement 1
-says value-result mode must write the callee's final local value back
-to the caller "only when the function returns" -- but bind_parameters
-runs once, at CALL time, before the body executes. One function alone
-can't do both "bind at call time" and "write back at return time," so
-this starter adds a second function, commit_value_result, called
-AFTER the simulated function body finishes. bind_parameters sets up
-bookkeeping for value-result parameters (a list of (param_name,
-caller_var_name) pairs), and commit_value_result uses it to do the
-delayed write-back.
+Value-result binding has two steps: bind_parameters runs at call time
+and records each caller destination; commit_value_result runs after
+the simulated body and copies the final local values back in parameter
+order. The handout specifies both steps.
 
 Design note 2: variables are stored as Cell objects (a mutable box),
 not raw values, specifically so reference-mode parameters can share
@@ -82,8 +76,32 @@ def bind_parameters(param_specs: List[Tuple[str, str]], arg_nodes: list, caller_
     an attribute on callee_record such as callee_record.pending_writeback).
     """
     # TODO
-    raise NotImplementedError
+    callee_record.pending_writeback = []
+    
+    for (name,mode), arg in zip(param_specs, arg_nodes):
 
+        if mode == "value":
+            value = evaluate(arg, caller_env)
+            callee_record.locals_env.define(name, Cell(value))
+        
+        elif mode == "reference":
+            if not isinstance(arg, Variable):
+                raise TypeError("Reference arguments must be variables")
+
+            cell = caller_env.resolve(arg.name)
+            callee_record.locals_env.define(name, cell)
+        
+        elif mode == "value-result":
+            if not isinstance(arg, Variable):
+                raise TypeError("value-result arguments must be variables")
+
+            cell = caller_env.resolve(arg.name)
+            callee_record.locals_env.define(name, Cell(cell.value))
+
+            callee_record.pending_writeback.append((name, cell))
+
+        else:
+            raise ValueError(f"Unknown parameter mode: {mode}")
 
 def commit_value_result(callee_record, caller_env: Environment) -> None:
     """
@@ -93,13 +111,16 @@ def commit_value_result(callee_record, caller_env: Environment) -> None:
     has finished running).
     """
     # TODO
-    raise NotImplementedError
+    for name, caller_cell in callee_record.pending_writeback:
+        local_cell = callee_record.locals_env.resolve(name)
+        caller_cell.value = local_cell.value
 
 
 class Closure:
     def __init__(self, declaration: FunctionDecl, defining_env: Environment) -> None:
         # TODO
-        raise NotImplementedError
+        self.declaration = declaration
+        self.defining_env = defining_env
 
     def call(self, args: list, caller_env: Environment):
         """
@@ -110,4 +131,11 @@ class Closure:
         that new environment and return the result.
         """
         # TODO
-        raise NotImplementedError
+        callee_env = Environment(parent=self.defining_env)
+
+        for name, value in zip(self.declaration.params, args):
+            callee_env.define(name, Cell(value))
+
+        result = evaluate(self.declaration.body, callee_env)
+
+        return result

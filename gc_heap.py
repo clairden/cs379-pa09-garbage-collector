@@ -34,16 +34,22 @@ class HeapNode:
 class GCHeap:
     def __init__(self) -> None:
         # TODO: internal storage -- e.g. {handle: (obj, refcount)} -- and a handle counter.
-        raise NotImplementedError
+        self.heap = {}
+        self.next_handle = 1
 
     def allocate(self, obj: Any) -> int:
         """Store obj, return a new handle. Initial refcount is 1 (the creating reference)."""
         # TODO
-        raise NotImplementedError
+        handle = self.next_handle 
+        self.heap[handle] = (obj, 1) #set heap as object and initial refcount as 1
+        self.next_handle += 1 #increment handle 
+        return handle
 
     def incref(self, handle: int) -> None:
         # TODO
-        raise NotImplementedError
+        obj, count = self.heap[handle] #unpack tuple to increase the count 
+        count += 1 #increase count int
+        self.heap[handle] = (obj, count) #update tuple dict with new count
 
     def decref(self, handle: int) -> None:
         """
@@ -52,13 +58,25 @@ class GCHeap:
         get_child_handles() (if it has that method), recursively.
         """
         # TODO
-        raise NotImplementedError
+        obj, count = self.heap[handle]
+        count -= 1
+        if count > 0:
+            self.heap[handle] = (obj, count)
+        else:
+            del self.heap[handle] 
+
+        if hasattr(obj, "get_child_handles"):
+            for child_handle in obj.get_child_handles():
+                self.decref(child_handle)
 
     def is_alive(self, handle: int) -> bool:
         # TODO
-        raise NotImplementedError
+        if handle in self.heap:
+            return True
+        else:
+            return False
 
     def live_count(self) -> int:
         """Number of currently-alive (refcount > 0) handles."""
         # TODO
-        raise NotImplementedError
+        return len(self.heap)
